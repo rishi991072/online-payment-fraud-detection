@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Online Payment Fraud Detection</title>
+<link rel="preconnect" href="https://cdn.jsdelivr.net" />
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
+<style>
+  :root{
+    --bg-1:#0b1020;
+    --bg-2:#0f1630;
+    --panel:#121a39cc;
+    --glass:rgba(255,255,255,0.06);
+    --stroke:#2e3a75;
+    --text:#e9efff;
+    --muted:#9fb2ff;
+    --accent:#6a8dff;
+    --accent-2:#00e1ff;
+    --ok:#2dd36f;
+    --warn:#ff3b3b;
+    --neutral:#6a6f8a;
+    --chip:#151e44;
+    --chip-hover:#1b2658;
+    --ring:#2a356e;
+    --shadow:0 12px 30px rgba(0,0,0,.45);
+    --radius:18px;
+  }
+
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;
+    color:var(--text);
+    background: radial-gradient(1200px 700px at 10% 0%, #122054 0%, transparent 60%),
+                radial-gradient(900px 600px at 100% 100%, #0f1a46 0%, transparent 55%),
+                linear-gradient(180deg, var(--bg-1), var(--bg-2));
+    overflow:hidden;
+    font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Inter, "Helvetica Neue", Arial;
+    color-scheme: dark;
+  }
+
+  /* Particles canvas */
+  #bgParticles{
+    position:fixed; inset:0; z-index:-1; pointer-events:none; opacity:.55;
+    filter: saturate(1.2) contrast(1.05);
+  }
+
+  /* Top bar */
+  .topbar{
+    position:fixed; top:0; left:0; right:0; height:68px;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:0 22px 0 18px; backdrop-filter: blur(10px);
+    background: linear-gradient(180deg, rgba(18,26,60,.75), rgba(18,26,60,.25));
+    border-bottom:1px solid #27336f;
+    z-index:5;
+  }
+  .brand{
+    display:flex; align-items:center; gap:14px;
+  }
+  .logo{
+    width:44px; height:44px; border-radius:14px;
+    background: radial-gradient(80% 80% at 30% 30%, #00ffee 0%, #008cff 48%, #3920ff 100%);
+    box-shadow: 0 0 24px rgba(0,208,255,.6), inset 0 0 18px rgba(255,255,255,.35);
+    position:relative;
+    animation: breathe 2.8s ease-in-out infinite;
+  }
+  .logo::after{
+    content:"FD"; position:absolute; inset:0;
+    display:grid; place-items:center; font-weight:800; letter-spacing:.5px;
+    color:rgba(255,255,255,.92); text-shadow:0 2px 10px rgba(0,0,0,.45);
+  }
+  @keyframes breathe{
+    0%,100%{transform:scale(1); box-shadow:0 0 20px rgba(0,208,255,.45), inset 0 0 14px rgba(255,255,255,.28)}
+    50%{transform:scale(1.04); box-shadow:0 0 36px rgba(0,208,255,.75), inset 0 0 22px rgba(255,255,255,.42)}
+  }
+  .title{
+    line-height:1.1; display:flex; flex-direction:column;
+  }
+  .title strong{ font-size:18px; letter-spacing:.6px; text-transform:uppercase }
+  .title span{ font-size:12px; color:var(--muted); opacity:.9 }
+
+  /* Download CSV pill (top-right) */
+  .csv-pill{
+    position:fixed; top:14px; right:16px; z-index:6;
+    display:inline-flex; align-items:center; gap:10px;
+    padding:12px 16px; border-radius:999px; text-decoration:none;
+    background: linear-gradient(135deg, #1c2a66, #283a86);
+    border:1px solid #2d3c84; color:#eaf2ff; font-weight:700; letter-spacing:.3px;
+    box-shadow: var(--shadow), 0 0 0 0 rgba(0,225,255,.0);
+    transition: transform .18s ease, box-shadow .25s ease, background .25s ease;
+  }
+  .csv-pill:hover{ transform: translateY(-2px); box-shadow: var(--shadow), 0 0 0 8px rgba(0,225,255,.08) }
+  .csv-pill:active{ transform: translateY(0) scale(.99) }
+  .csv-pill .dot{ width:8px; height:8px; border-radius:50%; background:var(--accent-2); box-shadow:0 0 10px rgba(0,225,255,.9) }
+
+  /* Layout grid */
+  .wrap{
+    position: absolute; top:78px; bottom:0; left:0; right:0; padding:18px 18px 22px;
+  }
+  .grid{
+    height:100%;
+    display:grid;
+    grid-template-columns: 2.1fr 2.2fr 1.2fr;
+    gap:18px;
+  }
+
+  .card{
+    height:100%; border-radius: var(--radius);
+    background: linear-gradient(180deg, rgba(22,31,78,.6), rgba(16,22,57,.45));
+    border:1px solid var(--stroke);
+    box-shadow: var(--shadow);
+    overflow:hidden; position:relative;
+  }
+  .card__head{
+    padding:14px 16px; border-bottom:1px solid #22306b;
+    display:flex; align-items:center; justify-content:space-between;
+    background: linear-gradient(180deg, rgba(18,28,68,.7), rgba(18,28,68,.25));
+  }
+  .card__title{ font-weight:800; letter-spacing:.5px; text-transform:uppercase; color:#bcd1ff; }
+  .card__body{ height:calc(100% - 54px); overflow:auto; padding:18px; }
+
+  /* Input chips row */
+  .chips{
+    display:flex; flex-wrap:wrap; gap:12px;
+  }
+  .chip{
+    flex: 1 1 240px; min-width: 210px;
+    background: var(--chip); border:1px solid #24306a; border-radius:16px;
+    padding:12px 12px 10px; transition: transform .16s ease, border-color .18s ease, box-shadow .25s ease;
+    position:relative;
+  }
+  .chip:hover{ transform: translateY(-3px); border-color:#3a4aa1; box-shadow: 0 10px 24px rgba(26,38,94,.35) }
+  .chip:has(input:focus), .chip:has(select:focus){
+    border-color:#4b63ff; box-shadow: 0 0 0 7px rgba(85,117,255,.14)
+  }
+  .chip label{
+    font-size:12px; letter-spacing:.3px; color:#a7b6ff; display:block; margin-bottom:6px; opacity:.95
+  }
+  .chip input, .chip select{
+    width:100%; height:42px; border-radius:12px; border:1px solid #2b3974;
+    padding:0 12px; font-weight:600; color:#eaf0ff;
+    background: linear-gradient(180deg, #0f1538, #111a44);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.04);
+    outline:none; transition: border-color .18s;
+    appearance:none;
+  }
+  .chip select option{ background:#111a44; color:#f2f6ff }
+  .row-split{ display:grid; grid-template-columns: 1fr 1fr; gap:12px }
+
+  /* Segmented role toggle */
+  .seg{
+    display:inline-flex; background:#0e1538; border:1px solid #2a3774; border-radius:14px; padding:4px;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.04);
+  }
+  .seg button{
+    min-width:120px; padding:10px 12px; border-radius:10px; border:none; cursor:pointer;
+    font-weight:800; letter-spacing:.4px; color:#b9c8ff; background:transparent;
+    transition: background .18s, color .18s, transform .12s;
+  }
+  .seg button.active{
+    background: linear-gradient(180deg, #1a2662, #12205a);
+    color:#eaf1ff; box-shadow: inset 0 0 0 1px #3647a8;
+  }
+  .seg button:hover{ transform: translateY(-1px) }
+
+  /* Predict button */
+  .btn{
+    margin-top:14px; width:100%; height:52px; border-radius:14px; border:1px solid #324196;
+    color:#eef3ff; background: linear-gradient(135deg, #2b3e9b, #3c56da 55%, #2b3e9b);
+    font-weight:900; letter-spacing:.6px; cursor:pointer;
+    box-shadow: var(--shadow); transition: transform .14s, box-shadow .25s, filter .18s;
+  }
+  .btn:hover{ transform: translateY(-2px); filter: brightness(1.08) }
+  .btn:active{ transform: translateY(0) scale(.99) }
+
+  /* Chart block */
+  .chartWrap{
+    height:62%; display:grid; place-items:center; position:relative;
+  }
+  .ringFrame{
+    position:absolute; inset:auto; width:420px; height:420px; border-radius:50%;
+    background:
+      radial-gradient(120px 120px at 50% 50%, rgba(255,255,255,.05) 0, transparent 60%),
+      radial-gradient(80px 80px at 70% 30%, rgba(0,225,255,.08), transparent 70%),
+      linear-gradient(180deg, rgba(255,255,255,.05), transparent 50%);
+    filter: drop-shadow(0 12px 24px rgba(0,0,0,.5));
+    pointer-events:none;
+  }
+  .centerStat{
+    position:absolute; display:grid; place-items:center; text-align:center;
+  }
+  .centerStat .big{
+    font-size:42px; font-weight:900; letter-spacing:.3px;
+  }
+  .centerStat .small{ font-size:13px; color:#aab8ff; margin-top:6px }
+
+  .resultRow{
+    height:38%; padding:18px; display:grid; grid-template-columns:1.5fr 1fr; gap:14px;
+  }
+  .resultCard{
+    border:1px solid #2a3a82; border-radius:16px; padding:16px; background: linear-gradient(180deg, #0f1a44, #0e1434);
+  }
+  .badge{
+    display:inline-flex; align-items:center; gap:8px; padding:8px 12px; border-radius:999px; font-weight:800; letter-spacing:.4px;
+  }
+  .badge.ok{ background: rgba(45,211,111,.12); color:#8ef5bf; border:1px solid rgba(45,211,111,.35) }
+  .badge.warn{ background: rgba(255,59,59,.12); color:#ffb3b3; border:1px solid rgba(255,59,59,.35) }
+  .kv{ margin-top:10px; display:grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap:10px; font-size:13px; color:#c9d6ff }
+  .kv div{ background:#0f183e; border:1px solid #23306c; border-radius:12px; padding:10px 12px }
+
+  /* History */
+  .histWrap{ padding-right:8px }
+  .histItem{
+    background: linear-gradient(180deg, #0f183d, #0d1434);
+    border:1px solid #253171; border-radius:14px; padding:12px; margin-bottom:12px;
+    transform: translateX(18px); opacity:0;
+    animation: slideIn .35s ease forwards;
+  }
+  @keyframes slideIn{
+    to{ transform: translateX(0); opacity:1 }
+  }
+  .histHead{ display:flex; align-items:center; justify-content:space-between; margin-bottom:6px }
+  .pill{ padding:4px 8px; border-radius:999px; font-weight:800; font-size:11px; letter-spacing:.3px }
+  .pill.ok{ background: rgba(45,211,111,.18); color:#9cf3c6; border:1px solid rgba(45,211,111,.35) }
+  .pill.warn{ background: rgba(255,59,59,.18); color:#ffc1c1; border:1px solid rgba(255,59,59,.35) }
+  .muted{ color:#9fb2ff; font-size:12px }
+  .histKV{ display:flex; flex-wrap:wrap; gap:8px; margin-top:6px }
+  .histKV .tag{ background:#0f1739; border:1px solid #24306a; border-radius:999px; padding:6px 10px; font-size:12px; color:#cfe1ff }
+
+  /* Scroll styling */
+  .card__body::-webkit-scrollbar{ width:10px }
+  .card__body::-webkit-scrollbar-thumb{ background:#28336e; border-radius:8px }
+
+  @media (max-width:1200px){
+    .grid{ grid-template-columns: 1.7fr 2.3fr 1.2fr }
+    .ringFrame{ width:360px; height:360px }
+  }
+  @media (max-width:1024px){
+    .grid{ grid-template-columns: 1fr; overflow:auto }
+    .card{ height:auto; }
+    body{ overflow:auto }
+    .csv-pill{ position:fixed }
+  }
+
+</style>
+</head>
+<body>
+<canvas id="bgParticles"></canvas>
+
+<!-- Topbar -->
+<div class="topbar">
+  <div class="brand">
+    <div class="logo" aria-hidden="true"></div>
+    <div class="title">
+      <strong>Online Payment Fraud Detection Tool</strong>
+      <span>Real-time risk insights • animated analytics</span>
+    </div>
+  </div>
+
+  <a class="csv-pill" href="/download_csv" download="FD_Insights.csv" title="Download latest predictions as CSV">
+    <span class="dot"></span> Download CSV
+  </a>
+</div>
+
+<div class="wrap">
+  <div class="grid">
+
+    <!-- Inputs -->
+    <section class="card">
+      <div class="card__head">
+        <div class="card__title">Transaction Inputs</div>
+        <div class="seg" role="tablist" aria-label="Role">
+          <button class="active" id="seg-sender" aria-selected="true">Sender</button>
+          <button id="seg-receiver" aria-selected="false">Receiver</button>
+        </div>
+      </div>
+      <div class="card__body">
+        <div class="chips">
+
+          <div class="chip">
+            <label for="step">Step (Hour)</label>
+            <input id="step" type="number" min="1" placeholder="e.g. 247 (hour of simulation)" />
+          </div>
+
+          <div class="chip">
+            <label for="type">Transaction Type</label>
+            <select id="type">
+              <option value="PAYMENT">PAYMENT</option>
+              <option value="TRANSFER">TRANSFER</option>
+              <option value="CASH_OUT">CASH_OUT</option>
+              <option value="DEBIT">DEBIT</option>
+            </select>
+          </div>
+
+          <div class="chip">
+            <label for="amount">Amount</label>
+            <input id="amount" type="number" min="0" step="0.01" placeholder="Enter amount" />
+          </div>
+
+          <!-- Sender fields -->
+          <div class="chip role-sender">
+            <label for="oldbalanceOrg">Old Balance (Sender)</label>
+            <input id="oldbalanceOrg" type="number" step="0.01" placeholder="Sender old balance" />
+          </div>
+          <div class="chip role-sender">
+            <label for="newbalanceOrig">New Balance (Sender)</label>
+            <input id="newbalanceOrig" type="number" step="0.01" placeholder="Sender new balance" />
+          </div>
+
+          <!-- Receiver fields -->
+          <div class="chip role-receiver" style="display:none">
+            <label for="oldbalanceDest">Old Balance (Receiver)</label>
+            <input id="oldbalanceDest" type="number" step="0.01" placeholder="Receiver old balance" />
+          </div>
+          <div class="chip role-receiver" style="display:none">
+            <label for="newbalanceDest">New Balance (Receiver)</label>
+            <input id="newbalanceDest" type="number" step="0.01" placeholder="Receiver new balance" />
+          </div>
+
+        </div>
+
+        <button id="predictBtn" class="btn">Predict Transaction</button>
+      </div>
+    </section>
+
+    <!-- Chart & result -->
+    <section class="card">
+      <div class="card__head">
+        <div class="card__title">Risk Visualization</div>
+      </div>
+      <div class="card__body" style="display:flex; flex-direction:column">
+        <div class="chartWrap">
+          <div class="ringFrame"></div>
+          <canvas id="fraudChart" width="420" height="420" aria-label="Fraud probability chart"></canvas>
+          <div class="centerStat" style="inset:0">
+            <div class="big" id="centerPercent">—</div>
+            <div class="small" id="centerLabel">Fraud Probability</div>
+          </div>
+        </div>
+
+        <div class="resultRow">
+          <div class="resultCard" id="resultCard">
+            <div id="resultBadge" class="badge" style="margin-bottom:10px">Awaiting prediction</div>
+            <div class="kv" id="kv">
+              <div>Type: <b id="kvType">—</b></div>
+              <div>Role: <b id="kvRole">—</b></div>
+              <div>Amount: <b id="kvAmount">—</b></div>
+              <div>Step (Hour): <b id="kvStep">—</b></div>
+            </div>
+          </div>
+
+          <div class="resultCard">
+            <div class="badge" style="background:rgba(0,225,255,.12); color:#9fefff; border:1px solid rgba(0,225,255,.35)">
+              Live Status
+            </div>
+            <div class="kv" style="margin-top:10px">
+              <div>Fraud %: <b id="kvFraud">—</b></div>
+              <div>Safe %: <b id="kvSafe">—</b></div>
+              <div>Prediction: <b id="kvPred">—</b></div>
+              <div>Updated: <b id="kvTime">—</b></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- History -->
+    <section class="card">
+      <div class="card__head">
+        <div class="card__title">Recent History (max 4)</div>
+      </div>
+      <div class="card__body histWrap" id="history"></div>
+    </section>
+
+  </div>
+</div>
+
+<script>
+/* -------- Particles (GPU friendly) -------- */
+(function(){
+  const c = document.getElementById('bgParticles');
+  const ctx = c.getContext('2d');
+  let w, h, dpr;
+  let nodes = [];
+  const MAX = 70;
+  const speed = 0.25;
+
+  function resize(){
+    dpr = window.devicePixelRatio || 1;
+    w = c.width = window.innerWidth * dpr;
+    h = c.height = (window.innerHeight) * dpr;
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+  }
+  function init(){
+    nodes = [];
+    for(let i=0;i<MAX;i++){
+      nodes.push({
+        x: Math.random()*w, y: Math.random()*h,
+        vx: (Math.random()-.5)*speed, vy:(Math.random()-.5)*speed,
+        r: 1 + Math.random()*2
+      });
+    }
+  }
+  function step(){
+    ctx.clearRect(0,0,w,h);
+    for(const n of nodes){
+      n.x+=n.vx; n.y+=n.vy;
+      if(n.x<0||n.x>w) n.vx*=-1;
+      if(n.y<0||n.y>h) n.vy*=-1;
+      ctx.beginPath();
+      ctx.arc(n.x, n.y, n.r, 0, Math.PI*2);
+      ctx.fillStyle = 'rgba(120,170,255,.18)';
+      ctx.fill();
+    }
+    // light links
+    for(let i=0;i<nodes.length;i++){
+      for(let j=i+1;j<nodes.length;j++){
+        const a=nodes[i], b=nodes[j];
+        const dx=a.x-b.x, dy=a.y-b.y, dist=Math.hypot(dx,dy);
+        if(dist<130){
+          ctx.globalAlpha = (1 - dist/130)*0.24;
+          ctx.beginPath();
+          ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y);
+          ctx.strokeStyle = '#4b6cff';
+          ctx.lineWidth = 1;
+          ctx.stroke();
+          ctx.globalAlpha = 1;
+        }
+      }
+    }
+    if(!prefersReduced) requestAnimationFrame(step);
+  }
+  const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  window.addEventListener('resize', ()=>{resize(); init(); if(!prefersReduced) step();});
+  resize(); init(); if(!prefersReduced) step();
+})();
+
+/* -------- Role segmented control -------- */
+let role = 'sender';
+const segSender = document.getElementById('seg-sender');
+const segReceiver = document.getElementById('seg-receiver');
+const senderFields = document.querySelectorAll('.role-sender');
+const receiverFields = document.querySelectorAll('.role-receiver');
+
+function setRole(next){
+  role = next;
+  if(role==='sender'){
+    segSender.classList.add('active'); segSender.setAttribute('aria-selected','true');
+    segReceiver.classList.remove('active'); segReceiver.setAttribute('aria-selected','false');
+    senderFields.forEach(e=>e.style.display='block');
+    receiverFields.forEach(e=>e.style.display='none');
+  }else{
+    segReceiver.classList.add('active'); segReceiver.setAttribute('aria-selected','true');
+    segSender.classList.remove('active'); segSender.setAttribute('aria-selected','false');
+    senderFields.forEach(e=>e.style.display='none');
+    receiverFields.forEach(e=>e.style.display='block');
+  }
+}
+segSender.addEventListener('click', ()=>setRole('sender'));
+segReceiver.addEventListener('click', ()=>setRole('receiver'));
+
+/* -------- Chart (neutral until predict) -------- */
+const ctx = document.getElementById('fraudChart').getContext('2d');
+let chart = new Chart(ctx, {
+  type:'doughnut',
+  data:{
+    labels:['Fraud','Safe'],
+    datasets:[{
+      data:[0,100],
+      borderWidth:0,
+      backgroundColor:['#6a6f8a','#2a2f4a']
+    }]
+  },
+  options:{
+    responsive:true,
+    cutout:'72%',
+    animation:{ duration: 900, easing: 'easeOutQuart' },
+    plugins:{ legend:{ display:false }, tooltip:{ enabled:false } }
+  }
+});
+
+/* -------- Helpers -------- */
+const byId = id => document.getElementById(id);
+const fields = {
+  step: byId('step'),
+  type: byId('type'),
+  amount: byId('amount'),
+  oldbalanceOrg: byId('oldbalanceOrg'),
+  newbalanceOrig: byId('newbalanceOrig'),
+  oldbalanceDest: byId('oldbalanceDest'),
+  newbalanceDest: byId('newbalanceDest'),
+};
+
+function nowTime(){
+  const d = new Date();
+  return d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+}
+
+/* -------- Predict -------- */
+byId('predictBtn').addEventListener('click', async ()=>{
+  const payload = {
+    role,
+    step: fields.step.value || "0",
+    type: fields.type.value,
+    amount: fields.amount.value || "0",
+    oldbalanceOrg: fields.oldbalanceOrg.value || "0",
+    newbalanceOrig: fields.newbalanceOrig.value || "0",
+    oldbalanceDest: fields.oldbalanceDest.value || "0",
+    newbalanceDest: fields.newbalanceDest.value || "0",
+  };
+  console.log('➡ sending', payload);
+
+  try{
+    const res = await fetch('/predict', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(payload)
+    });
+    if(!res.ok){ throw new Error('Request failed: '+res.status); }
+    const { result, history } = await res.json();
+    console.log('⬅ result', result);
+
+    // Update chart colors & data (fraud red, legit green)
+    const fraud = Number(result.probability)||0;
+    const safe = Math.max(0, 100 - fraud);
+    const fraudColor = '#ff3b3b';
+    const safeColor = '#2dd36f';
+    chart.data.datasets[0].data = [fraud, safe];
+    chart.data.datasets[0].backgroundColor = [fraudColor, safeColor];
+    chart.update();
+
+    // Center text
+    byId('centerPercent').textContent = `${fraud}%`;
+    // Result badges/cards
+    const pred = result.prediction;
+    const isFraud = /fraudulent/i.test(pred);
+    const badge = byId('resultBadge');
+    badge.className = 'badge ' + (isFraud ? 'warn' : 'ok');
+    badge.textContent = isFraud ? 'Fraudulent Transaction' : 'Legitimate Transaction';
+
+    byId('kvType').textContent = payload.type;
+    byId('kvRole').textContent = role[0].toUpperCase() + role.slice(1);
+    byId('kvAmount').textContent = payload.amount;
+    byId('kvStep').textContent = `${payload.step} hr`;
+    byId('kvFraud').textContent = `${fraud}%`;
+    byId('kvSafe').textContent = `${safe}%`;
+    byId('kvPred').textContent = isFraud ? 'Fraud' : 'Legit';
+    byId('kvTime').textContent = nowTime();
+
+    // Render history from server (already capped at 4)
+    renderHistory(history);
+
+  }catch(err){
+    console.error(err);
+    alert('Prediction failed. Check console / backend logs.');
+  }
+});
+
+/* -------- History render -------- */
+function renderHistory(list){
+  const wrap = byId('history');
+  wrap.innerHTML = '';
+  (list||[]).forEach((h, idx)=>{
+    const p = Number(h.probability)||0;
+    const ok = !/fraud/i.test(h.prediction);
+    const el = document.createElement('div');
+    el.className='histItem';
+    el.style.animationDelay = (idx*60)+'ms';
+    el.innerHTML = `
+      <div class="histHead">
+        <div class="pill ${ok?'ok':'warn'}">${ok?'LEGIT':'FRAUD'}</div>
+        <div class="muted">${nowTime()}</div>
+      </div>
+      <div class="muted" style="margin-bottom:6px">Fraud Probability: <b style="color:${ok?'#7ceea8':'#ff9a9a'}">${p}%</b></div>
+      <div class="histKV">
+        <span class="tag">Role: <b>${h.details.role}</b></span>
+        <span class="tag">Type: <b>${h.details.type}</b></span>
+        <span class="tag">Amount: <b>${h.details.amount}</b></span>
+        <span class="tag">Step: <b>${h.details.step} hr</b></span>
+      </div>
+    `;
+    wrap.appendChild(el);
+  });
+}
+
+/* -------- Accessibility tweak for reduced motion -------- */
+if(window.matchMedia('(prefers-reduced-motion: reduce)').matches){
+  Chart.defaults.animation = false;
+}
+</script>
+</body>
+</html>
+
+
+
+
+
+
+
+
+
